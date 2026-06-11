@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1a2e">
+<title>Polar Sleep</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--border:#e8e7e3;--text:#1a1a1a;--muted:#777;--accent:#2d5a9b;--accent2:#6c4fa0;--deep:#2d5a9b;--rem:#6c4fa0;--light:#bbb8ae;--warn:#c4600e;--good:#2d7a3a;--danger:#b33030}
+@media(prefers-color-scheme:dark){:root{--bg:#141418;--card:#1e1e24;--border:#2c2c34;--text:#e8e7e3;--muted:#888;--accent:#5b8fd4;--accent2:#9b7fd4;--deep:#5b8fd4;--rem:#9b7fd4;--light:#666;--warn:#e0943a;--good:#5cb86c;--danger:#e05555}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-text-size-adjust:100%}
+.app{max-width:600px;margin:0 auto;padding:16px;padding-bottom:env(safe-area-inset-bottom,16px)}
+h1{font-size:20px;font-weight:600;letter-spacing:-.02em}
+.sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}
+@media(min-width:480px){.stats{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--bg);border-radius:10px;padding:10px 12px}
+.stat-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.stat-v{font-size:20px;font-weight:600;margin-top:1px}
+.stat-u{font-size:10px;color:var(--muted)}
+.tabs{display:flex;gap:4px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;-webkit-overflow-scrolling:touch}
+.tab{flex-shrink:0;font-size:12px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;white-space:nowrap}
+.tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.chart-box{position:relative;height:200px}
+.upload-zone{border:2px dashed var(--border);border-radius:14px;padding:32px 16px;text-align:center;cursor:pointer;color:var(--muted);font-size:14px;transition:border-color .2s}
+.upload-zone:active{border-color:var(--accent)}
+.upload-zone input{display:none}
+.btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.btn:active{transform:scale(.97)}
+.btn-accent{background:var(--accent);color:#fff;border-color:var(--accent)}
+.hidden{display:none}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--muted);margin-top:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block;vertical-align:-1px;margin-right:3px}
+.sep{border:none;border-top:1px solid var(--border);margin:12px 0}
+.info{font-size:12px;color:var(--muted);text-align:center;padding:8px}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;min-width:500px;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:6px 4px;border-bottom:1px solid var(--border);font-weight:500;color:var(--muted);font-size:10px;text-transform:uppercase;position:sticky;top:0;background:var(--card)}
+td{padding:5px 4px;border-bottom:1px solid var(--bg)}
+.highlight{color:var(--accent);font-weight:500}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>🌙 Polar Sleep</h1>
+  <p class="sub">Alvásadatok elemzése</p>
+
+  <div id="upload-card" class="card">
+    <div class="upload-zone" id="drop" onclick="document.getElementById('file').click()">
+      <div style="font-size:28px;margin-bottom:8px">📂</div>
+      <div>JSON vagy CSV fájl betöltése</div>
+      <div style="font-size:12px;margin-top:4px">polar_sleep_*.json / .csv</div>
+      <input type="file" id="file" accept=".json,.csv" onchange="loadFile(event)">
+    </div>
+    <div style="text-align:center;margin-top:10px">
+      <button class="btn" onclick="loadDemo()">Demó adatok betöltése</button>
+    </div>
+  </div>
+
+  <div id="results" class="hidden">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:14px;font-weight:500" id="title"></span>
+        <div class="row">
+          <button class="btn" onclick="exportCSV()">CSV</button>
+          <button class="btn" onclick="exportJSON()">JSON</button>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="card">
+      <div class="tabs" id="tabs"></div>
+      <div class="chart-box"><canvas id="ch0"></canvas></div>
+      <div class="chart-box hidden"><canvas id="ch1"></canvas></div>
+      <div class="chart-box hidden"><canvas id="ch2"></canvas></div>
+      <div class="chart-box hidden"><canvas id="ch3"></canvas></div>
+      <div class="chart-box hidden"><canvas id="ch4"></canvas></div>
+      <div id="legend" class="legend"></div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:14px;font-weight:500;margin-bottom:8px">Utolsó 30 éjszaka</div>
+      <div class="scroll-x" style="max-height:300px;overflow-y:auto">
+        <table><thead id="thead"></thead><tbody id="tbody"></tbody></table>
+      </div>
+    </div>
+
+    <hr class="sep">
+    <div class="row" style="justify-content:center">
+      <button class="btn" onclick="document.getElementById('file').click()">Másik fájl betöltése</button>
+    </div>
+  </div>
+
+  <div class="info">Az adatlekéréshez futtasd a <code>polar_sleep.ts</code> scriptet a gépen.<br>
+  Ez az app csak megjeleníti és exportálja az adatokat.</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+let D=[],CHS=[];
+const TAB_NAMES=['Alváspontszám','Fázisok','Időzítés','HRV + pulzus','Heti átlagok'];
+const LEGENDS=[
+  [{c:'var(--accent)',l:'Alváspontszám'}],
+  [{c:'var(--deep)',l:'Mély'},{c:'var(--rem)',l:'REM'},{c:'var(--light)',l:'Könnyű'}],
+  [{c:'var(--accent2)',l:'Lefekvés'},{c:'var(--warn)',l:'Ébredés'}],
+  [{c:'var(--good)',l:'HRV'},{c:'var(--danger)',l:'Nyugalmi pulzus'}],
+  [{c:'var(--accent)',l:'Pontszám'},{c:'var(--deep)',l:'Mély (perc)'},{c:'var(--rem)',l:'REM (perc)'}],
+];
+
+function avg(a){const v=a.filter(x=>x!=null&&!isNaN(x));return v.length?Math.round(v.reduce((s,x)=>s+x,0)/v.length*10)/10:null}
+function fH(h){if(h==null||isNaN(h))return'–';const hh=h>=24?h-24:h;return Math.floor(hh)+':'+(Math.round((hh%1)*60)+'').padStart(2,'0')}
+
+function loadFile(e){
+  const f=e.target.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const txt=ev.target.result;
+      if(f.name.endsWith('.json')){D=JSON.parse(txt)}
+      else{D=parseCSV(txt)}
+      render();
+    }catch(err){alert('Hiba: '+err.message)}
+  };
+  reader.readAsText(f);
+}
+
+function parseCSV(txt){
+  const lines=txt.trim().split('\\n');
+  const hdr=lines[0].split(',').map(h=>h.trim().replace(/"/g,''));
+  return lines.slice(1).map(line=>{
+    const vals=line.split(',');
+    const row={};
+    hdr.forEach((h,i)=>{const v=(vals[i]||'').trim().replace(/"/g,'');row[h]=v===''?null:isNaN(v)?v:+v});
+    return row;
+  }).filter(r=>r.date);
+}
+
+function loadDemo(){
+  D=[];
+  let bh=40,s=2026;
+  function R(){s=(s*16807)%2147483647;return(s-1)/2147483646}
+  function rg(m,sd){return m+sd*(Math.sqrt(-2*Math.log(R()))*Math.cos(2*Math.PI*R()))}
+  for(let i=364;i>=0;i--){
+    const dt=new Date();dt.setDate(dt.getDate()-i);
+    const d=dt.toISOString().slice(0,10);
+    const wd=dt.getDay();const wk=Math.floor(i/7);
+    bh=Math.max(28,Math.min(60,bh+rg(.05,1.5)));
+    const sc=Math.round(Math.max(35,Math.min(98,65+rg(0,10)+(wd===0||wd===6?3:-1))));
+    const total=Math.round(Math.max(300,Math.min(540,420+rg(0,40))));
+    const deep=Math.round(Math.max(30,Math.min(120,70+rg(0,15))));
+    const rem=Math.round(Math.max(40,Math.min(130,90+rg(0,18))));
+    const light=Math.max(60,total-deep-rem-Math.round(Math.max(0,rg(15,10))));
+    const bed=Math.round((22.5+rg(0,.6))*100)/100;
+    const wake=Math.round((6.8+rg(0,.5))*100)/100;
+    const hrv=Math.round(Math.max(15,bh+rg(0,4)));
+    const rhr=Math.round(Math.max(40,55-bh*.15+rg(0,2)));
+    const ans=Math.round(rg(2,.1<R()?5:8)*10)/10;
+    D.push({date:d,sleep_score:sc,total_sleep_min:total,deep_sleep_min:deep,
+      rem_sleep_min:rem,light_sleep_min:light,wake_during_min:Math.round(Math.max(0,rg(15,10))),
+      bedtime_hour:bed,wake_hour:wake,sleep_efficiency:Math.round(Math.max(70,Math.min(98,88+rg(0,4)))),
+      continuity:Math.round(Math.max(1,Math.min(5,3.5+rg(0,.8)))),interruptions:Math.round(Math.max(0,rg(2,1.5))),
+      ans_charge:ans,hrv_avg:hrv,breathing_rate:Math.round((14+rg(0,1))*10)/10,resting_hr:rhr});
+  }
+  render();
+}
+
+function render(){
+  if(!D.length)return;
+  D.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  document.getElementById('upload-card').classList.add('hidden');
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('title').textContent=D.length+' éjszaka — '+D[0].date+' → '+D[D.length-1].date;
+
+  const m=[
+    ['Pontszám',avg(D.map(r=>r.sleep_score)),'/ 100'],
+    ['Alvásidő',avg(D.map(r=>r.total_sleep_min)),'perc'],
+    ['Mély',avg(D.map(r=>r.deep_sleep_min)),'perc'],
+    ['REM',avg(D.map(r=>r.rem_sleep_min)),'perc'],
+    ['HRV',avg(D.map(r=>r.hrv_avg)),'ms'],
+    ['ANS',avg(D.map(r=>r.ans_charge)),''],
+    ['Lefekvés',fH(avg(D.map(r=>r.bedtime_hour))),''],
+    ['Kelés',fH(avg(D.map(r=>r.wake_hour))),''],
+  ];
+  document.getElementById('stats').innerHTML=m.map(([l,v,u])=>
+    '<div class="stat"><div class="stat-l">'+l+'</div><div class="stat-v">'+(v??'–')+'</div><div class="stat-u">'+u+'</div></div>').join('');
+
+  // Tabs
+  const tabEl=document.getElementById('tabs');
+  tabEl.innerHTML=TAB_NAMES.map((n,i)=>'<button class="tab'+(i===0?' on':'')+'" onclick="showTab('+i+',this)">'+n+'</button>').join('');
+
+  drawCharts();
+  drawTable();
+  showLegend(0);
+}
+
+function showTab(i,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  btn.classList.add('on');
+  document.querySelectorAll('.chart-box').forEach((c,j)=>c.classList.toggle('hidden',j!==i));
+  showLegend(i);
+}
+function showLegend(i){
+  document.getElementById('legend').innerHTML=LEGENDS[i].map(({c,l})=>'<span><i style="background:'+c+'"></i>'+l+'</span>').join('');
+}
+
+function getCS(){
+  const s=getComputedStyle(document.documentElement);
+  return{accent:s.getPropertyValue('--accent').trim(),accent2:s.getPropertyValue('--accent2').trim(),
+    deep:s.getPropertyValue('--deep').trim(),rem:s.getPropertyValue('--rem').trim(),
+    light:s.getPropertyValue('--light').trim(),warn:s.getPropertyValue('--warn').trim(),
+    good:s.getPropertyValue('--good').trim(),danger:s.getPropertyValue('--danger').trim(),
+    muted:s.getPropertyValue('--muted').trim(),text:s.getPropertyValue('--text').trim()};
+}
+
+function drawCharts(){
+  CHS.forEach(c=>c.destroy());CHS=[];
+  const cs=getCS();
+  const labels=D.map(r=>(r.date||'').slice(5));
+  const opt={responsive:true,maintainAspectRatio:false,animation:false,
+    plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},
+    scales:{x:{ticks:{color:cs.muted,autoSkip:true,maxTicksLimit:12,maxRotation:45,font:{size:10}},grid:{display:false}},
+      y:{ticks:{color:cs.muted,font:{size:10}},grid:{color:cs.muted+'22'},beginAtZero:false}}};
+
+  // 0: Alváspontszám
+  CHS.push(new Chart(document.getElementById('ch0'),{type:'line',data:{labels,datasets:[
+    {data:D.map(r=>r.sleep_score),borderColor:cs.accent,tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true,
+     fill:{target:'origin',above:cs.accent+'15'}}
+  ]},options:opt}));
+
+  // 1: Fázisok stacked
+  CHS.push(new Chart(document.getElementById('ch1'),{type:'bar',data:{labels,datasets:[
+    {label:'Mély',data:D.map(r=>r.deep_sleep_min),backgroundColor:cs.deep,borderRadius:1},
+    {label:'REM',data:D.map(r=>r.rem_sleep_min),backgroundColor:cs.rem,borderRadius:1},
+    {label:'Könnyű',data:D.map(r=>r.light_sleep_min),backgroundColor:cs.light,borderRadius:1},
+  ]},options:{...opt,scales:{...opt.scales,x:{...opt.scales.x,stacked:true},y:{...opt.scales.y,stacked:true,beginAtZero:true}}}}));
+
+  // 2: Időzítés
+  CHS.push(new Chart(document.getElementById('ch2'),{type:'line',data:{labels,datasets:[
+    {data:D.map(r=>r.bedtime_hour),borderColor:cs.accent2,tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true},
+    {data:D.map(r=>r.wake_hour),borderColor:cs.warn,tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true},
+  ]},options:{...opt,scales:{...opt.scales,y:{...opt.scales.y,ticks:{...opt.scales.y.ticks,callback:v=>fH(v)}}}}}));
+
+  // 3: HRV + pulzus
+  CHS.push(new Chart(document.getElementById('ch3'),{type:'line',data:{labels,datasets:[
+    {data:D.map(r=>r.hrv_avg),borderColor:cs.good,tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true},
+    {data:D.map(r=>r.resting_hr),borderColor:cs.danger,tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true,borderDash:[4,3]},
+  ]},options:opt}));
+
+  // 4: Heti átlagok
+  const weeks=new Map();
+  D.forEach(r=>{const w=r.date.slice(0,7);if(!weeks.has(w))weeks.set(w,[]);weeks.get(w).push(r)});
+  const wl=[...weeks.keys()];
+  CHS.push(new Chart(document.getElementById('ch4'),{type:'bar',data:{labels:wl.map(w=>w.slice(2)),datasets:[
+    {label:'Pont',data:wl.map(w=>avg(weeks.get(w).map(r=>r.sleep_score))),backgroundColor:cs.accent,borderRadius:2,barPercentage:.4},
+    {label:'Mély',data:wl.map(w=>avg(weeks.get(w).map(r=>r.deep_sleep_min))),backgroundColor:cs.deep+'88',borderRadius:2,barPercentage:.4},
+    {label:'REM',data:wl.map(w=>avg(weeks.get(w).map(r=>r.rem_sleep_min))),backgroundColor:cs.rem+'88',borderRadius:2,barPercentage:.4},
+  ]},options:{...opt,scales:{...opt.scales,x:{...opt.scales.x,stacked:false},y:{...opt.scales.y,beginAtZero:true}}}}));
+}
+
+function drawTable(){
+  const cols=[['Dátum','date'],['Pont','sleep_score'],['Alvás','total_sleep_min'],['Mély','deep_sleep_min'],['REM','rem_sleep_min'],['HRV','hrv_avg'],['ANS','ans_charge'],['Pulzus','resting_hr']];
+  document.getElementById('thead').innerHTML='<tr>'+cols.map(([n])=>'<th>'+n+'</th>').join('')+'</tr>';
+  document.getElementById('tbody').innerHTML=D.slice().reverse().slice(0,30).map(r=>
+    '<tr>'+cols.map(([,k])=>'<td>'+(r[k]??'–')+'</td>').join('')+'</tr>').join('');
+}
+
+function exportCSV(){
+  if(!D.length)return;
+  const cols=Object.keys(D[0]);
+  const csv=[cols.join(','),...D.map(r=>cols.map(c=>{const v=String(r[c]??'');return v.includes(',')?'"'+v+'"':v}).join(','))].join('\\n');
+  dl(csv,'polar_sleep.csv','text/csv');
+}
+function exportJSON(){if(D.length)dl(JSON.stringify(D,null,2),'polar_sleep.json','application/json')}
+function dl(c,n,t){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:t}));a.download=n;a.click()}
+</script>
+</body>
+</html>
